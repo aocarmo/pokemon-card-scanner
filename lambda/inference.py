@@ -5,18 +5,25 @@ import numpy as np
 from PIL import Image
 import tensorflow as tf
 
-# Load model and labels at cold start
-MODEL_PATH = Path(__file__).parent / "model" / "model.tflite"
-LABELS_PATH = Path(__file__).parent / "model" / "labels.json"
+# Load model and labels at startup
+MODEL_PATH = Path(__file__).parent / "model" / "current" / "model.tflite"
+LABELS_PATH = Path(__file__).parent / "model" / "current" / "labels.json"
 
-interpreter = tf.lite.Interpreter(model_path=str(MODEL_PATH))
-interpreter.allocate_tensors()
+# Check if model exists
+if not MODEL_PATH.exists():
+    print(f"⚠️  Model not found at {MODEL_PATH}")
+    print("   Copy trained model: cp ../training/models/v1/model.tflite lambda/model/current/")
+    interpreter = None
+    labels = {}
+else:
+    interpreter = tf.lite.Interpreter(model_path=str(MODEL_PATH))
+    interpreter.allocate_tensors()
+    
+    with open(LABELS_PATH) as f:
+        labels = json.load(f)
 
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
-
-with open(LABELS_PATH) as f:
-    labels = json.load(f)
+input_details = interpreter.get_input_details() if interpreter else None
+output_details = interpreter.get_output_details() if interpreter else None
 
 def preprocess_image(image_bytes):
     """Preprocess image for model input"""
@@ -30,6 +37,15 @@ def preprocess_image(image_bytes):
 
 def predict_card(image_bytes):
     """Run inference on image"""
+    if not interpreter:
+        return {
+            'error': 'Model not loaded',
+            'nome': 'Unknown',
+            'colecao': 'Unknown',
+            'numero': 'Unknown',
+            'confianca': 0.0
+        }
+    
     # Preprocess
     input_data = preprocess_image(image_bytes)
     

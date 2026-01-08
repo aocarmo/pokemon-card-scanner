@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a73e8">
+    <title>Pokemon Card Scanner</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎴 Pokemon Card Scanner</h1>
+            <p class="subtitle">Identifique suas cartas instantaneamente</p>
+        </header>
+
+        <main>
+            <!-- Camera Section -->
+            <section class="camera-section">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas" style="display: none;"></canvas>
+                
+                <div class="controls">
+                    <button id="startCamera" class="btn btn-primary">📷 Abrir Câmera</button>
+                    <button id="capture" class="btn btn-success" style="display: none;">📸 Capturar</button>
+                    <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                    <button id="uploadBtn" class="btn btn-secondary">📁 Upload</button>
+                </div>
+            </section>
+
+            <!-- Result Section -->
+            <section class="result-section" id="resultSection" style="display: none;">
+                <h2>Resultado</h2>
+                <div class="card-info">
+                    <img id="capturedImage" alt="Carta capturada">
+                    <div class="info">
+                        <p><strong>Nome:</strong> <span id="cardName">-</span></p>
+                        <p><strong>Coleção:</strong> <span id="cardCollection">-</span></p>
+                        <p><strong>Número:</strong> <span id="cardNumber">-</span></p>
+                        <p><strong>Confiança:</strong> <span id="confidence">-</span></p>
+                    </div>
+                </div>
+                <button id="addToInventory" class="btn btn-success">✓ Adicionar ao Estoque</button>
+            </section>
+
+            <!-- Inventory Section -->
+            <section class="inventory-section">
+                <h2>Estoque <span id="totalCards">(0 cartas)</span></h2>
+                <div class="inventory-controls">
+                    <button id="exportCSV" class="btn btn-secondary">💾 Exportar CSV</button>
+                    <button id="clearInventory" class="btn btn-danger">🗑️ Limpar</button>
+                </div>
+                <div id="inventoryList" class="inventory-list"></div>
+            </section>
+
+            <!-- Settings -->
+            <section class="settings-section">
+                <h3>⚙️ Configurações</h3>
+                <div class="setting">
+                    <label for="apiUrl">API URL:</label>
+                    <input type="text" id="apiUrl" value="http://192.168.1.100:5000">
+                    <button id="saveSettings" class="btn btn-small">Salvar</button>
+                </div>
+                <p class="hint">💡 Troque para o IP do seu Mac na rede local</p>
+            </section>
+        </main>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Processando...</p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
