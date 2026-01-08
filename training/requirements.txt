@@ -1,4 +1,6 @@
 tensorflow>=2.15.0,<3.0.0
+tensorflow-macos>=2.15.0; sys_platform == 'darwin' and platform_machine == 'arm64'
+tensorflow-metal>=1.1.0; sys_platform == 'darwin' and platform_machine == 'arm64'
 keras>=3.0.0
 pillow>=10.0.0
 numpy>=1.24.0

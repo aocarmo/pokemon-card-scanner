@@ -9,7 +9,7 @@ active_collections:
 training:
   model: "mobilenet_v2"
   image_size: 224
-  batch_size: 32
+  batch_size: 64  # Otimizado para M4 Pro
   epochs: 20
   learning_rate: 0.001
   validation_split: 0.1

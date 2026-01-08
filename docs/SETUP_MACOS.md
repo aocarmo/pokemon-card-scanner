@@ -151,11 +151,22 @@ training:
   batch_size: 16  # ou 8
 ```
 
-### Apple Silicon (M1/M2/M3)
-TensorFlow funciona nativamente. Para melhor performance:
+### Apple Silicon (M1/M2/M3/M4)
+TensorFlow funciona nativamente com aceleração GPU. Para melhor performance:
+
 ```bash
+# Instalar TensorFlow otimizado para Apple Silicon
+pip install tensorflow-macos
 pip install tensorflow-metal
+
+# Verificar GPU disponível
+python3 -c "import tensorflow as tf; print('GPUs:', tf.config.list_physical_devices('GPU'))"
 ```
+
+**Performance esperada no M4 Pro**:
+- Treinamento: ~30-45min (vs 1-2h em CPU)
+- Inferência: ~50-100ms por imagem
+- Batch size recomendado: 64 (você tem RAM suficiente)
 
 ## Próximos passos
 
