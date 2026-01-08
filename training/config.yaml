@@ -1,0 +1,35 @@
+# Configuração de coleções e treinamento
+version: 1
+active_collections:
+  - name: "Base Set"
+    enabled: true
+    path: "data/collections/base_set"
+    estimated_cards: 102
+
+training:
+  model: "mobilenet_v2"
+  image_size: 224
+  batch_size: 32
+  epochs: 20
+  learning_rate: 0.001
+  validation_split: 0.1
+  test_split: 0.1
+  
+  # Data augmentation
+  augmentation:
+    rotation_range: 10
+    width_shift_range: 0.1
+    height_shift_range: 0.1
+    zoom_range: 0.1
+    horizontal_flip: false
+    brightness_range: [0.8, 1.2]
+
+  # Transfer learning
+  incremental: false
+  base_model_path: null
+  freeze_layers: 100
+
+export:
+  format: "tflite"
+  quantization: true
+  optimize_for: "size"
