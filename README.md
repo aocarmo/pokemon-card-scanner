@@ -44,6 +44,7 @@ pokemon-card-scanner/
 ## Documentação
 
 - [PLAN.md](PLAN.md) - Planejamento completo e roadmap
+- [docs/SETUP_MACOS.md](docs/SETUP_MACOS.md) - **Setup para macOS** (comece aqui!)
 - [docs/API.md](docs/API.md) - Documentação da API
 - [docs/ADD_COLLECTION.md](docs/ADD_COLLECTION.md) - Como adicionar coleções
 
