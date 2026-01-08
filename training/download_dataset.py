@@ -1,39 +1,34 @@
 #!/usr/bin/env python3
 """Download Pokemon TCG dataset from Kaggle"""
 
-import os
-import subprocess
+import kagglehub
 from pathlib import Path
 
 def download_dataset():
-    data_dir = Path("data/raw")
-    data_dir.mkdir(parents=True, exist_ok=True)
-    
     print("📥 Downloading Pokemon TCG dataset from Kaggle...")
     
     try:
-        subprocess.run([
-            "kaggle", "datasets", "download", 
-            "-d", "ellimaaac/pokemon-tcg-all-image-cards",
-            "-p", str(data_dir)
-        ], check=True)
+        # Download using kagglehub
+        path = kagglehub.dataset_download("ellimaaac/pokemon-tcg-all-image-cards")
         
-        print("📦 Extracting dataset...")
-        subprocess.run([
-            "unzip", "-q", 
-            str(data_dir / "pokemon-tcg-all-image-cards.zip"),
-            "-d", str(data_dir)
-        ], check=True)
+        print(f"✅ Dataset downloaded successfully!")
+        print(f"📁 Path to dataset files: {path}")
         
-        print("✅ Dataset downloaded successfully!")
-        print(f"📁 Location: {data_dir.absolute()}")
+        # List available collections
+        dataset_path = Path(path)
+        collections = [d.name for d in dataset_path.iterdir() if d.is_dir()]
         
-    except subprocess.CalledProcessError as e:
+        print(f"\n📦 Available collections ({len(collections)}):")
+        for col in sorted(collections):
+            print(f"   - {col}")
+        
+        return path
+        
+    except Exception as e:
         print(f"❌ Error: {e}")
         print("\n💡 Make sure you have:")
-        print("   1. Kaggle CLI installed: pip install kaggle")
-        print("   2. Kaggle credentials in ~/.kaggle/kaggle.json")
-        print("   3. Accepted dataset terms on Kaggle website")
+        print("   1. kagglehub installed: pip install kagglehub")
+        print("   2. Kaggle credentials configured")
 
 if __name__ == "__main__":
     download_dataset()

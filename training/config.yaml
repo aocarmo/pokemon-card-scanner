@@ -1,10 +1,10 @@
 # Configuração de coleções e treinamento
 version: 1
 active_collections:
-  - name: "Base Set"
+  - name: "Prismatic Evolutions"
     enabled: true
-    path: "data/collections/base_set"
-    estimated_cards: 102
+    path: "data/collections/prismatic_evolutions"
+    estimated_cards: 200
 
 training:
   model: "mobilenet_v2"

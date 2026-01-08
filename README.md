@@ -17,14 +17,12 @@ python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Configurar Kaggle
-mkdir ~/.kaggle
-# Copiar kaggle.json para ~/.kaggle/
-chmod 600 ~/.kaggle/kaggle.json
-
-# Baixar e preparar Base Set
+# Baixar dataset (Prismatic Evolutions)
 python download_dataset.py
-python prepare_data.py --collection "Base Set"
+# Copie o path retornado
+
+# Preparar dados
+python prepare_data.py --source /path/from/kagglehub --collection prismatic-evolutions
 
 # Treinar modelo v1
 python train_model.py
@@ -51,11 +49,16 @@ pokemon-card-scanner/
 
 ## Roadmap
 
-- [ ] MVP: Modelo v1 com Base Set
-- [ ] Lambda deployment
+- [x] Estrutura do projeto
+- [x] Scripts de treinamento
+- [x] Lambda + SAM IaC
+- [x] Download dataset com kagglehub
+- [x] Script de setup automatizado
+- [ ] **PRÓXIMO**: Executar setup e treinar modelo v1
+- [ ] Testar modelo localmente
+- [ ] Deploy Lambda
 - [ ] PWA básica
-- [ ] Adicionar Jungle (v2)
-- [ ] Adicionar Fossil (v3)
+- [ ] Adicionar mais coleções
 
 ## Licença
 
