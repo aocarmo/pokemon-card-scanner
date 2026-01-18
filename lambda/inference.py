@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 import tensorflow as tf
+# from ocr_parser import extract_card_metadata  # Comentado temporariamente
 
 # Load model and labels at startup
 MODEL_PATH = Path(__file__).parent / "model" / "current" / "model.tflite"
@@ -36,7 +37,7 @@ def preprocess_image(image_bytes):
     return img_array
 
 def predict_card(image_bytes):
-    """Run inference on image"""
+    """Run inference on image (OCR temporariamente desabilitado)"""
     if not interpreter:
         return {
             'error': 'Model not loaded',
@@ -46,24 +47,49 @@ def predict_card(image_bytes):
             'confianca': 0.0
         }
     
-    # Preprocess
+    # Preprocess para modelo visual
     input_data = preprocess_image(image_bytes)
     
-    # Inference
+    # Inference visual
     interpreter.set_tensor(input_details[0]['index'], input_data)
     interpreter.invoke()
     output_data = interpreter.get_tensor(output_details[0]['index'])
     
-    # Get top prediction
-    class_id = int(np.argmax(output_data[0]))
-    confidence = float(output_data[0][class_id])
+    # Get top 3 predictions visuais
+    top_indices = np.argsort(output_data[0])[-3:][::-1]
+    visual_predictions = []
     
-    # Get card info
+    for i, idx in enumerate(top_indices):
+        card_info = labels.get(str(idx), {})
+        confidence = float(output_data[0][idx])
+        visual_predictions.append({
+            'rank': i + 1,
+            'nome': card_info.get('nome', 'Unknown'),
+            'confianca': round(confidence, 4)
+        })
+    
+    # Usar predição visual
+    class_id = int(top_indices[0])
+    final_confidence = float(output_data[0][class_id])
     card_info = labels.get(str(class_id), {})
+    
+    # Verificar threshold
+    if final_confidence < 0.5:
+        return {
+            'nome': 'Carta não reconhecida (baixa confiança)',
+            'colecao': 'Unknown',
+            'numero': 'Unknown',
+            'confianca': round(final_confidence, 4),
+            'method': 'Visual Only',
+            'visual_predictions': visual_predictions,
+            'threshold_warning': True
+        }
     
     return {
         'nome': card_info.get('nome', 'Unknown'),
         'colecao': card_info.get('colecao', 'Unknown'),
         'numero': card_info.get('numero', 'Unknown'),
-        'confianca': round(confidence, 4)
+        'confianca': round(final_confidence, 4),
+        'method': 'Visual Only',
+        'visual_predictions': visual_predictions
     }

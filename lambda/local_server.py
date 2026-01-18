@@ -32,4 +32,4 @@ def predict():
 
 if __name__ == '__main__':
     # Escuta em todas as interfaces (0.0.0.0) para aceitar conexões do celular
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True)

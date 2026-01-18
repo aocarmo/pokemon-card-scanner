@@ -1,0 +1,32 @@
+{
+  "version": "v1",
+  "created_at": "2026-01-08T17:42:01.166784",
+  "collections": [
+    "Prismatic Evolutions"
+  ],
+  "num_classes": 180,
+  "accuracy": 1.0,
+  "config": {
+    "model": "mobilenet_v2",
+    "image_size": 224,
+    "batch_size": 64,
+    "epochs": 20,
+    "learning_rate": 0.001,
+    "validation_split": 0.1,
+    "test_split": 0.1,
+    "augmentation": {
+      "rotation_range": 10,
+      "width_shift_range": 0.1,
+      "height_shift_range": 0.1,
+      "zoom_range": 0.1,
+      "horizontal_flip": false,
+      "brightness_range": [
+        0.8,
+        1.2
+      ]
+    },
+    "incremental": false,
+    "base_model_path": null,
+    "freeze_layers": 100
+  }
+}

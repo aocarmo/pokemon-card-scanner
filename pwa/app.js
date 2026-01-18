@@ -1,5 +1,5 @@
 // Configuration
-let API_URL = localStorage.getItem('apiUrl') || 'http://192.168.1.100:5000';
+let API_URL = localStorage.getItem('apiUrl') || 'http://192.168.68.108:5003';
 let inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
 
 // Elements
@@ -8,6 +8,7 @@ const canvas = document.getElementById('canvas');
 const startCameraBtn = document.getElementById('startCamera');
 const captureBtn = document.getElementById('capture');
 const uploadBtn = document.getElementById('uploadBtn');
+const analyzeBtn = document.getElementById('analyzeBtn');
 const fileInput = document.getElementById('fileInput');
 const resultSection = document.getElementById('resultSection');
 const loading = document.getElementById('loading');
@@ -17,6 +18,13 @@ let stream = null;
 
 startCameraBtn.addEventListener('click', async () => {
     try {
+        // Verificar suporte
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            document.getElementById('httpsWarning').style.display = 'block';
+            alert('Câmera não disponível. Use o botão "Enviar Foto" para fazer upload de uma imagem.');
+            return;
+        }
+        
         stream = await navigator.mediaDevices.getUserMedia({ 
             video: { facingMode: 'environment' } 
         });
@@ -25,7 +33,8 @@ startCameraBtn.addEventListener('click', async () => {
         startCameraBtn.style.display = 'none';
         captureBtn.style.display = 'inline-block';
     } catch (err) {
-        alert('Erro ao acessar câmera: ' + err.message);
+        document.getElementById('httpsWarning').style.display = 'block';
+        alert('Erro ao acessar câmera. Use o botão "Enviar Foto" para fazer upload de uma imagem.');
     }
 });
 
@@ -41,6 +50,38 @@ captureBtn.addEventListener('click', () => {
 
 uploadBtn.addEventListener('click', () => {
     fileInput.click();
+});
+
+// Botão para analisar canto da carta
+analyzeBtn.addEventListener('click', async () => {
+    if (!currentImageData) return;
+    
+    try {
+        showLoading('Analisando canto inferior esquerdo...');
+        
+        const response = await fetch(`${API_URL}/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: currentImageData })
+        });
+        
+        const result = await response.json();
+        console.log('🔍 Análise do canto:', result);
+        
+        // Mostrar resultado na tela
+        document.getElementById('cardName').textContent = 'Análise do Canto Concluída';
+        document.getElementById('cardCollection').textContent = 'Verifique o console e /tmp/';
+        document.getElementById('cardNumber').textContent = 'Regiões salvas para debug';
+        document.getElementById('confidence').textContent = '100%';
+        
+        alert('Análise concluída! Verifique o console do navegador e a pasta /tmp/ no Mac para ver as regiões extraídas.');
+        
+    } catch (error) {
+        console.error('Erro na análise:', error);
+        alert('Erro na análise: ' + error.message);
+    } finally {
+        hideLoading();
+    }
 });
 
 fileInput.addEventListener('change', (e) => {
@@ -88,6 +129,7 @@ function displayResult(result, imageBlob) {
     img.src = URL.createObjectURL(imageBlob);
     
     resultSection.style.display = 'block';
+    analyzeBtn.style.display = 'inline-block';
     resultSection.dataset.result = JSON.stringify(result);
 }
 
