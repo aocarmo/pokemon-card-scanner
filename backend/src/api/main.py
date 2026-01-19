@@ -75,3 +75,9 @@ async def root():
         "docs": "/docs",
         "health": "/health"
     }
+
+@app.post("/api/cards/confirm")
+async def confirm_card(data: dict):
+    """Confirma identificação da carta"""
+    print(f"✅ Carta confirmada: {data.get('name')} - {data.get('number')}")
+    return {"status": "confirmed"}

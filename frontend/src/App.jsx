@@ -44,9 +44,12 @@ export default function App() {
 
   const handleConfirm = async () => {
     try {
-      await fetch(`${API_URL}/cards/confirm`, {
+      await fetch(`${API_URL}/api/cards/confirm`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true'
+        },
         body: JSON.stringify({
           name: scanResult.name,
           collection: scanResult.set || scanResult.collection || 'unknown',
@@ -74,7 +77,11 @@ export default function App() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await fetch(`${API_URL}/scan${dbg ? '?debug=true' : ''}`, { method: 'POST', body: formData });
+      const res = await fetch(`${API_URL}/api/cards/identify`, { 
+        method: 'POST', 
+        headers: { 'Bypass-Tunnel-Reminder': 'true' },
+        body: formData 
+      });
       const data = await res.json();
       if (data.error) setError(data.error);
       else {

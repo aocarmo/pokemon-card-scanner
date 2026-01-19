@@ -24,24 +24,24 @@ python -m uvicorn api.app:app --reload --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 
 # Frontend
-echo "📦 Setting up Frontend..."
-cd "$PROJECT_ROOT/frontend"
+# echo "📦 Setting up Frontend..."
+# cd "$PROJECT_ROOT/frontend"
 
-if [ ! -d "node_modules" ]; then
-    echo "Installing npm packages..."
-    npm install
-fi
+# if [ ! -d "node_modules" ]; then
+#     echo "Installing npm packages..."
+#     npm install
+# fi
 
-echo "Starting Frontend on http://localhost:3000"
-npm start &
-FRONTEND_PID=$!
+# echo "Starting Frontend on http://localhost:3000"
+# npm start &
+# FRONTEND_PID=$!
 
-echo ""
-echo "✅ Services running:"
-echo "   Backend:  http://localhost:8000"
-echo "   Frontend: http://localhost:3000"
-echo ""
-echo "Press Ctrl+C to stop all services"
+# echo ""
+# echo "✅ Services running:"
+# echo "   Backend:  http://localhost:8000"
+# echo "   Frontend: http://localhost:3000"
+# echo ""
+# echo "Press Ctrl+C to stop all services"
 
-trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit" SIGINT SIGTERM
+trap "kill $BACKEND_PID 2>/dev/null; exit" SIGINT SIGTERM
 wait
