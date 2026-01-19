@@ -7,17 +7,11 @@ export default function ScanResult({ result }) {
         <tbody>
           <tr><td>Name:</td><td>{result.name || '-'}</td></tr>
           <tr><td>Number:</td><td>{result.number || '-'}</td></tr>
-          <tr><td>Set:</td><td>{result.set || '-'}</td></tr>
-          <tr><td>Language:</td><td>{result.language || '-'}</td></tr>
-          <tr><td>Confidence:</td><td>{(result.confidence * 100).toFixed(1)}%</td></tr>
+          <tr><td>Collection:</td><td>{result.collection || '-'}</td></tr>
+          <tr><td>Language:</td><td>{result.language === 'pt' ? 'Portuguese' : result.language === 'en' ? 'English' : '-'}</td></tr>
+          <tr><td>Confidence:</td><td>{((result.confidence || 0) * 100).toFixed(0)}%</td></tr>
         </tbody>
       </table>
-      {result.debug_image && (
-        <div className="debug">
-          <h3>Debug Image</h3>
-          <img src={result.debug_image} alt="Debug" />
-        </div>
-      )}
     </div>
   );
 }

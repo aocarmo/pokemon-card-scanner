@@ -7,36 +7,31 @@ import ScanResult from './components/ScanResult';
 import './App.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const CONFIDENCE_THRESHOLD = 0.5;
+const RESULT_CONFIDENCE_THRESHOLD = 0.4;
 
 export default function App() {
   const [mode, setMode] = useState('camera');
-  const [scanResult, setScanResult] = useState(null);
-  const [boxes, setBoxes] = useState([]);
-  const [showModal, setShowModal] = useState(false);
   const [scanning, setScanning] = useState(true);
-  const [error, setError] = useState(null);
+  const [cardQuad, setCardQuad] = useState(null);
+  const [cardResult, setCardResult] = useState(null);
+  const [showModal, setShowModal] = useState(false);
   const [debug, setDebug] = useState(false);
+  const [error, setError] = useState(null);
 
-  const handleScanResult = useCallback((result) => {
-    console.log('[APP] Result:', result);
-    
-    if (result.error) {
-      setBoxes([]);
+  const handleDetection = useCallback((data) => {
+    // No detection - clear overlay
+    if (!data.detected) {
+      setCardQuad(null);
       return;
     }
-    
-    // Always update boxes
-    setBoxes(result.boxes || []);
-    setScanResult(result);
-    
-    const hasFields = result.name && result.number;
-    const confident = result.confidence >= CONFIDENCE_THRESHOLD;
-    
-    console.log(`[APP] name="${result.name}", number="${result.number}", conf=${result.confidence?.toFixed(2)}, pass=${hasFields && confident}`);
-    
-    if (hasFields && confident) {
-      console.log('[APP] Card identified! Showing modal');
+
+    // Detection but no result yet - show outline only
+    setCardQuad(data.card_quad);
+
+    // If we have a result with sufficient confidence, show modal
+    if (data.result && data.result.name && data.result.confidence >= RESULT_CONFIDENCE_THRESHOLD) {
+      console.log('[APP] Card identified:', data.result);
+      setCardResult(data.result);
       setScanning(false);
       setShowModal(true);
     }
@@ -44,17 +39,14 @@ export default function App() {
 
   const handleConfirm = async () => {
     try {
-      await fetch(`${API_URL}/api/cards/confirm`, {
+      await fetch(`${API_URL}/cards/confirm`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Bypass-Tunnel-Reminder': 'true'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: scanResult.name,
-          collection: scanResult.set || scanResult.collection || 'unknown',
-          number: scanResult.number,
-          language: scanResult.language || 'unknown'
+          name: cardResult.name,
+          collection: cardResult.collection || 'unknown',
+          number: cardResult.number || '',
+          language: cardResult.language || 'unknown'
         })
       });
     } catch (e) {
@@ -67,8 +59,8 @@ export default function App() {
 
   const resetAndResume = () => {
     setShowModal(false);
-    setScanResult(null);
-    setBoxes([]);
+    setCardResult(null);
+    setCardQuad(null);
     setScanning(true);
   };
 
@@ -77,17 +69,13 @@ export default function App() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await fetch(`${API_URL}/api/cards/identify`, { 
-        method: 'POST', 
-        headers: { 'Bypass-Tunnel-Reminder': 'true' },
-        body: formData 
-      });
+      const res = await fetch(`${API_URL}/scan${dbg ? '?debug=true' : ''}`, { method: 'POST', body: formData });
       const data = await res.json();
-      if (data.error) setError(data.error);
-      else {
-        setScanResult(data);
-        setBoxes(data.boxes || []);
-        if (data.name && data.number && data.confidence >= CONFIDENCE_THRESHOLD) setShowModal(true);
+      if (data.result) {
+        setCardResult(data.result);
+        setShowModal(true);
+      } else if (data.error) {
+        setError(data.error);
       }
     } catch (e) {
       setError(e.message);
@@ -113,31 +101,20 @@ export default function App() {
         <CameraScanner 
           apiUrl={API_URL} 
           scanning={scanning} 
-          onResult={handleScanResult} 
-          boxes={boxes}
+          onDetection={handleDetection} 
+          cardQuad={cardQuad}
           debug={debug}
         />
       ) : (
         <>
           <ImageUpload onUpload={handleUpload} loading={false} />
           {error && <p className="error">{error}</p>}
-          {scanResult && <ScanResult result={scanResult} />}
+          {cardResult && <ScanResult result={cardResult} />}
         </>
       )}
 
-      {/* Debug info panel */}
-      {debug && scanResult && (
-        <div className="debug-panel">
-          <h4>Debug Info</h4>
-          <pre>{JSON.stringify(scanResult.debug || {}, null, 2)}</pre>
-          <p>Boxes: {boxes.length}</p>
-          <p>Raw OCR Title: {scanResult.debug?.raw_ocr_title || 'N/A'}</p>
-          <p>Raw OCR Bottom: {scanResult.debug?.raw_ocr_bottom_left || 'N/A'}</p>
-        </div>
-      )}
-
-      {showModal && scanResult && (
-        <ConfirmModal result={scanResult} onConfirm={handleConfirm} onCancel={handleCancel} />
+      {showModal && cardResult && (
+        <ConfirmModal result={cardResult} onConfirm={handleConfirm} onCancel={handleCancel} />
       )}
     </div>
   );

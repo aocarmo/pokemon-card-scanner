@@ -1,12 +1,11 @@
 // FILE: src/components/CameraScanner.jsx
 import { useRef, useEffect, useState, useCallback } from 'react';
 
-export default function CameraScanner({ apiUrl, scanning, onResult, boxes, debug = false }) {
+export default function CameraScanner({ apiUrl, scanning, onDetection, cardQuad, debug }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const [cameraReady, setCameraReady] = useState(false);
-  const [frameCount, setFrameCount] = useState(0);
   const [videoDims, setVideoDims] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
@@ -15,35 +14,15 @@ export default function CameraScanner({ apiUrl, scanning, onResult, boxes, debug
   }, []);
 
   const startCamera = async () => {
-    console.log('[CAMERA] Starting camera with high resolution...');
     try {
-      // Try high resolution first, fallback to lower
-      const constraints = {
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1920, min: 1280 },
-          height: { ideal: 1080, min: 720 }
-        }
-      };
-      
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-      } catch (e) {
-        console.log('[CAMERA] High-res failed, trying fallback...');
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: 1280, height: 720 }
-        });
-      }
-      
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+      });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.onloadedmetadata = () => {
-          const vw = videoRef.current.videoWidth;
-          const vh = videoRef.current.videoHeight;
-          console.log(`[CAMERA] Camera ready: ${vw}x${vh}`);
-          setVideoDims({ w: vw, h: vh });
+          setVideoDims({ w: videoRef.current.videoWidth, h: videoRef.current.videoHeight });
           setCameraReady(true);
         };
       }
@@ -53,76 +32,45 @@ export default function CameraScanner({ apiUrl, scanning, onResult, boxes, debug
   };
 
   const stopCamera = () => {
-    console.log('[CAMERA] Stopping camera');
-    streamRef.current?.getTracks().forEach(track => track.stop());
+    streamRef.current?.getTracks().forEach(t => t.stop());
   };
 
   const captureAndScan = useCallback(async () => {
     if (!videoRef.current || !scanning || !cameraReady) return;
     
     const video = videoRef.current;
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    
-    // Create canvas with REAL video dimensions
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = vw;
-    tempCanvas.height = vh;
-    const ctx = tempCanvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, vw, vh);
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
 
-    const currentFrame = frameCount + 1;
-    setFrameCount(currentFrame);
-    console.log(`[CAMERA] Frame #${currentFrame}: ${vw}x${vh}`);
-
-    // Export as high quality JPEG
-    tempCanvas.toBlob(async (blob) => {
-      if (!blob) {
-        console.warn('[CAMERA] Failed to create blob');
-        return;
-      }
-      
-      const url = `${apiUrl}/scan${debug ? '?debug=true' : ''}`;
-      console.log(`[CAMERA] POST ${url}, size: ${(blob.size/1024).toFixed(1)}KB`);
-      
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
       const formData = new FormData();
       formData.append('file', blob, 'frame.jpg');
       
       try {
-        const res = await fetch(url, { method: 'POST', body: formData });
-        const data = await res.json();
-        
-        console.log('[CAMERA] Response:', {
-          name: data.name || '(none)',
-          number: data.number || '(none)',
-          confidence: data.confidence?.toFixed(2),
-          boxes: data.boxes?.length || 0,
-          debug: data.debug
+        const res = await fetch(`${apiUrl}/scan${debug ? '?debug=true' : ''}`, { 
+          method: 'POST', 
+          body: formData 
         });
-        
-        if (data.boxes) {
-          console.log('[CAMERA] Boxes:', data.boxes.map(b => `${b.label}@(${b.x},${b.y},${b.w},${b.h})`));
-        }
-        
-        onResult(data);
+        const data = await res.json();
+        console.log('[CAMERA] Response:', data);
+        onDetection(data);
       } catch (e) {
-        console.error('[CAMERA] Scan error:', e);
+        console.error('[CAMERA] Error:', e);
       }
     }, 'image/jpeg', 0.9);
-  }, [apiUrl, scanning, cameraReady, onResult, frameCount, debug]);
+  }, [apiUrl, scanning, cameraReady, onDetection, debug]);
 
-  // Scan loop at ~2-3 fps
+  // Scan loop ~3 FPS
   useEffect(() => {
-    if (!scanning || !cameraReady) {
-      console.log(`[CAMERA] Loop paused: scanning=${scanning}, ready=${cameraReady}`);
-      return;
-    }
-    console.log('[CAMERA] Starting scan loop (~2fps)');
-    const interval = setInterval(captureAndScan, 400);
+    if (!scanning || !cameraReady) return;
+    const interval = setInterval(captureAndScan, 333);
     return () => clearInterval(interval);
   }, [scanning, cameraReady, captureAndScan]);
 
-  // Draw bounding boxes on overlay canvas
+  // Draw card outline only when detected
   useEffect(() => {
     if (!canvasRef.current || !videoRef.current) return;
     
@@ -130,60 +78,23 @@ export default function CameraScanner({ apiUrl, scanning, onResult, boxes, debug
     const video = videoRef.current;
     const ctx = canvas.getContext('2d');
     
-    const vw = video.videoWidth || 640;
-    const vh = video.videoHeight || 480;
-    
-    // Canvas must match video resolution for correct box positioning
-    canvas.width = vw;
-    canvas.height = vh;
-    
-    ctx.clearRect(0, 0, vw, vh);
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (boxes && boxes.length > 0) {
-      console.log(`[CAMERA] Drawing ${boxes.length} boxes on ${vw}x${vh}`);
-      
-      boxes.forEach((box) => {
-        // Color by label
-        if (box.label === 'card' || box.label.includes('card')) {
-          ctx.strokeStyle = '#00ff00';
-          ctx.lineWidth = 4;
-        } else if (box.label.includes('title')) {
-          ctx.strokeStyle = '#00ffff';
-          ctx.lineWidth = 3;
-        } else if (box.label.includes('bottom') || box.label.includes('number')) {
-          ctx.strokeStyle = '#ffff00';
-          ctx.lineWidth = 3;
-        } else {
-          ctx.strokeStyle = '#ff00ff';
-          ctx.lineWidth = 2;
-        }
-        
-        ctx.strokeRect(box.x, box.y, box.w, box.h);
-        
-        // Label
-        const label = `${box.label} ${(box.conf * 100).toFixed(0)}%`;
-        ctx.font = 'bold 16px sans-serif';
-        const tw = ctx.measureText(label).width;
-        
-        ctx.fillStyle = ctx.strokeStyle;
-        ctx.fillRect(box.x, box.y - 24, tw + 8, 22);
-        
-        ctx.fillStyle = '#000';
-        ctx.fillText(label, box.x + 4, box.y - 7);
-      });
-    } else {
-      // Draw "no detection" indicator
-      ctx.strokeStyle = '#ff0000';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([10, 10]);
-      ctx.strokeRect(50, 50, vw - 100, vh - 100);
-      ctx.setLineDash([]);
-      
-      ctx.fillStyle = '#ff0000';
-      ctx.font = 'bold 20px sans-serif';
-      ctx.fillText('Position card in frame', 60, 40);
+    // Only draw if we have a quad
+    if (cardQuad && cardQuad.length === 4) {
+      ctx.strokeStyle = '#00ff00';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(cardQuad[0][0], cardQuad[0][1]);
+      ctx.lineTo(cardQuad[1][0], cardQuad[1][1]);
+      ctx.lineTo(cardQuad[2][0], cardQuad[2][1]);
+      ctx.lineTo(cardQuad[3][0], cardQuad[3][1]);
+      ctx.closePath();
+      ctx.stroke();
     }
-  }, [boxes]);
+  }, [cardQuad]);
 
   return (
     <div className="camera-container">
@@ -193,16 +104,9 @@ export default function CameraScanner({ apiUrl, scanning, onResult, boxes, debug
       </div>
       <div className="camera-status">
         {!cameraReady && <span>Starting camera...</span>}
-        {cameraReady && (
-          <>
-            <span className="dims">{videoDims.w}x{videoDims.h}</span>
-            {scanning ? (
-              <span className="scanning">🔍 Scanning... #{frameCount}</span>
-            ) : (
-              <span className="paused">⏸ Paused</span>
-            )}
-          </>
-        )}
+        {cameraReady && <span className="dims">{videoDims.w}x{videoDims.h}</span>}
+        {cameraReady && scanning && <span className="scanning">🔍 Scanning...</span>}
+        {cameraReady && !scanning && <span className="paused">⏸ Paused</span>}
       </div>
     </div>
   );

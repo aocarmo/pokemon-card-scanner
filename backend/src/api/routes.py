@@ -5,7 +5,6 @@ from pydantic import BaseModel
 import cv2
 import numpy as np
 import csv
-import os
 import logging
 import time
 from pathlib import Path
@@ -26,6 +25,8 @@ DEBUG_FRAMES_DIR.mkdir(exist_ok=True)
 CSV_PATH = Path(__file__).parent.parent.parent / "data" / "inventory.csv"
 CSV_PATH.parent.mkdir(exist_ok=True)
 
+DETECTION_THRESHOLD = 0.4
+
 
 class ConfirmCardRequest(BaseModel):
     name: str
@@ -34,98 +35,86 @@ class ConfirmCardRequest(BaseModel):
     language: str
 
 
-def fix_rotation(image: np.ndarray) -> tuple:
-    """Fix sideways images (landscape when should be portrait)."""
-    h, w = image.shape[:2]
-    rotated = False
-    # Pokemon cards are portrait - if width > height, rotate
-    if w > h:
-        logger.info(f"[API] Rotating image: {w}x{h} -> {h}x{w}")
-        image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
-        rotated = True
-    return image, rotated
-
-
 @router.post("/scan")
 async def scan_card(file: UploadFile = File(...), debug: bool = Query(False)):
     ts = int(time.time() * 1000)
-    logger.info(f"[API] /scan file={file.filename}, debug={debug}")
     
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     if image is None:
-        logger.error("[API] Invalid image")
-        raise HTTPException(status_code=400, detail="Invalid image file")
+        raise HTTPException(status_code=400, detail="Invalid image")
 
-    orig_shape = image.shape
-    logger.info(f"[API] Image: {orig_shape}")
+    h, w = image.shape[:2]
     
-    # Fix rotation
-    image, rotation_applied = fix_rotation(image)
-    if rotation_applied:
-        logger.info(f"[API] After rotation: {image.shape}")
-
-    debug_info = {
-        "saved_frame_path": None,
-        "saved_title_roi_path": None,
-        "saved_bottom_left_roi_path": None,
-        "raw_ocr_title": None,
-        "raw_ocr_bottom_left": None,
-        "rotation_applied": rotation_applied,
-        "original_shape": list(orig_shape),
-        "processed_shape": list(image.shape)
-    }
-
-    # Save debug frame
-    if debug:
-        frame_path = str(DEBUG_FRAMES_DIR / f"frame_{ts}.jpg")
-        cv2.imwrite(frame_path, image)
-        debug_info["saved_frame_path"] = f"/static/debug_frames/frame_{ts}.jpg"
-        logger.info(f"[API] Saved frame: {frame_path}")
-
-    debug_path = str(STATIC_DIR / "debug_output.jpg") if debug else None
-    scanner = get_scanner(debug=debug, debug_output_path=debug_path)
-
-    try:
-        result = scanner.execute(image, debug_info=debug_info if debug else None)
-        response = result.to_dict()
-        
-        if debug:
-            response["debug"] = debug_info
-            if debug_path and os.path.exists(debug_path):
-                response["debug_image"] = "/static/debug_output.jpg"
-        
-        logger.info(f"[API] Success: name={response.get('name')}, boxes={len(response.get('boxes', []))}")
-        return JSONResponse(content=response)
-        
-    except Exception as e:
-        logger.warning(f"[API] Scan failed: {e}")
-        # Return ROI boxes even on failure so overlay shows something
+    # Fix rotation if needed
+    if w > h:
+        image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
         h, w = image.shape[:2]
-        fallback_boxes = [
-            {"label": "roi_title", "x": int(w*0.05), "y": int(h*0.02), "w": int(w*0.8), "h": int(h*0.07), "conf": 0.0},
-            {"label": "roi_bottom_left", "x": int(w*0.02), "y": int(h*0.90), "w": int(w*0.5), "h": int(h*0.08), "conf": 0.0}
-        ]
-        response = {
-            "error": str(e), 
-            "name": None, 
-            "number": None, 
-            "collection": None,
-            "set": None, 
-            "language": None, 
-            "confidence": 0.0, 
-            "boxes": fallback_boxes
-        }
+
+    if debug:
+        cv2.imwrite(str(DEBUG_FRAMES_DIR / f"frame_{ts}.jpg"), image)
+
+    scanner = get_scanner(debug=debug, debug_output_path=str(STATIC_DIR / "debug.jpg"))
+    
+    # Phase 1: Detection only
+    contour, detection_conf = scanner.detect_card(image)
+    
+    if contour is None:
+        return JSONResponse(content={
+            "detected": False,
+            "detection_confidence": 0.0,
+            "card_quad": None,
+            "result": None
+        })
+    
+    # Convert contour to quad points
+    quad = contour.reshape(4, 2).tolist()
+    
+    if detection_conf < DETECTION_THRESHOLD:
+        return JSONResponse(content={
+            "detected": True,
+            "detection_confidence": detection_conf,
+            "card_quad": quad,
+            "result": None
+        })
+    
+    # Phase 2: Full processing
+    logger.info(f"[API] Detection confident ({detection_conf:.2f}), running OCR...")
+    
+    try:
+        result = scanner.process_card(image, contour)
+        
         if debug:
-            response["debug"] = debug_info
-        return JSONResponse(status_code=200, content=response)
+            warped = scanner.get_warped(image, contour)
+            if warped is not None:
+                cv2.imwrite(str(DEBUG_FRAMES_DIR / f"warped_{ts}.jpg"), warped)
+        
+        return JSONResponse(content={
+            "detected": True,
+            "detection_confidence": detection_conf,
+            "card_quad": quad,
+            "result": {
+                "name": result.get("name") or None,
+                "number": result.get("number") or None,
+                "collection": result.get("collection") or None,
+                "language": result.get("language"),
+                "confidence": result.get("confidence", 0.0)
+            }
+        })
+    except Exception as e:
+        logger.warning(f"[API] OCR failed: {e}")
+        return JSONResponse(content={
+            "detected": True,
+            "detection_confidence": detection_conf,
+            "card_quad": quad,
+            "result": None
+        })
 
 
 @router.post("/cards/confirm")
 async def confirm_card(request: ConfirmCardRequest):
-    logger.info(f"[API] /cards/confirm: {request.name}")
     rows = []
     found = False
 
@@ -155,7 +144,7 @@ async def confirm_card(request: ConfirmCardRequest):
         writer.writeheader()
         writer.writerows(rows)
 
-    return {"status": "ok", "message": f"Card saved: {request.name}"}
+    return {"status": "ok"}
 
 
 @router.get("/cards")
