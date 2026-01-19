@@ -7,31 +7,29 @@ import ScanResult from './components/ScanResult';
 import './App.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const RESULT_CONFIDENCE_THRESHOLD = 0.4;
 
 export default function App() {
   const [mode, setMode] = useState('camera');
   const [scanning, setScanning] = useState(true);
-  const [cardQuad, setCardQuad] = useState(null);
+  const [boxes, setBoxes] = useState([]);
   const [cardResult, setCardResult] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [debug, setDebug] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleDetection = useCallback((data) => {
-    // No detection - clear overlay
-    if (!data.detected) {
-      setCardQuad(null);
+  const handleScanResult = useCallback((data) => {
+    // Always update boxes for overlay
+    setBoxes(data.boxes || []);
+
+    if (data.status === 'no_card_detected') {
+      setCardResult(null);
       return;
     }
 
-    // Detection but no result yet - show outline only
-    setCardQuad(data.card_quad);
-
-    // If we have a result with sufficient confidence, show modal
-    if (data.result && data.result.name && data.result.confidence >= RESULT_CONFIDENCE_THRESHOLD) {
-      console.log('[APP] Card identified:', data.result);
-      setCardResult(data.result);
+    // Card detected - check if OCR succeeded
+    if (data.status === 'ok' && data.name) {
+      console.log('[APP] Card identified:', data);
+      setCardResult(data);
       setScanning(false);
       setShowModal(true);
     }
@@ -60,7 +58,7 @@ export default function App() {
   const resetAndResume = () => {
     setShowModal(false);
     setCardResult(null);
-    setCardQuad(null);
+    setBoxes([]);
     setScanning(true);
   };
 
@@ -69,13 +67,17 @@ export default function App() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await fetch(`${API_URL}/scan${dbg ? '?debug=true' : ''}`, { method: 'POST', body: formData });
+      const res = await fetch(`${API_URL}/scan${dbg ? '?debug=true' : ''}`, { 
+        method: 'POST', 
+        body: formData 
+      });
       const data = await res.json();
-      if (data.result) {
-        setCardResult(data.result);
+      setBoxes(data.boxes || []);
+      if (data.status === 'ok') {
+        setCardResult(data);
         setShowModal(true);
-      } else if (data.error) {
-        setError(data.error);
+      } else {
+        setError(data.status);
       }
     } catch (e) {
       setError(e.message);
@@ -85,11 +87,15 @@ export default function App() {
   return (
     <div className="app">
       <h1>Pokemon Card Scanner</h1>
-      
+
       <div className="controls">
         <div className="mode-toggle">
-          <button className={mode === 'camera' ? 'active' : ''} onClick={() => setMode('camera')}>📷 Camera</button>
-          <button className={mode === 'upload' ? 'active' : ''} onClick={() => setMode('upload')}>📁 Upload</button>
+          <button className={mode === 'camera' ? 'active' : ''} onClick={() => setMode('camera')}>
+            📷 Camera
+          </button>
+          <button className={mode === 'upload' ? 'active' : ''} onClick={() => setMode('upload')}>
+            📁 Upload
+          </button>
         </div>
         <label className="debug-toggle">
           <input type="checkbox" checked={debug} onChange={e => setDebug(e.target.checked)} />
@@ -98,11 +104,11 @@ export default function App() {
       </div>
 
       {mode === 'camera' ? (
-        <CameraScanner 
-          apiUrl={API_URL} 
-          scanning={scanning} 
-          onDetection={handleDetection} 
-          cardQuad={cardQuad}
+        <CameraScanner
+          apiUrl={API_URL}
+          scanning={scanning}
+          onResult={handleScanResult}
+          boxes={boxes}
           debug={debug}
         />
       ) : (
