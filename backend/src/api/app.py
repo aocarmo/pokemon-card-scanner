@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Pokemon Card Scanner API", version="1.0.0")
 
-# CORS for frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,6 +22,12 @@ app.add_middleware(
 
 STATIC_DIR = Path(__file__).parent.parent.parent / "static"
 STATIC_DIR.mkdir(exist_ok=True)
+
+DEBUG_FRAMES_DIR = Path(__file__).parent.parent.parent / "debug_frames"
+DEBUG_FRAMES_DIR.mkdir(exist_ok=True)
+
+# Mount static files
+app.mount("/static/debug_frames", StaticFiles(directory=str(DEBUG_FRAMES_DIR)), name="debug_frames")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(router)
@@ -34,4 +39,5 @@ async def health():
 @app.on_event("startup")
 async def startup():
     logger.info("[API] Pokemon Card Scanner API started")
-    logger.info(f"[API] Static dir: {STATIC_DIR}")
+    logger.info(f"[API] Static: {STATIC_DIR}")
+    logger.info(f"[API] Debug frames: {DEBUG_FRAMES_DIR}")

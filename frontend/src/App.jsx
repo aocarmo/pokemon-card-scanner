@@ -6,7 +6,7 @@ import ImageUpload from './components/ImageUpload';
 import ScanResult from './components/ScanResult';
 import './App.css';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const CONFIDENCE_THRESHOLD = 0.5;
 
 export default function App() {
@@ -16,82 +16,70 @@ export default function App() {
   const [showModal, setShowModal] = useState(false);
   const [scanning, setScanning] = useState(true);
   const [error, setError] = useState(null);
+  const [debug, setDebug] = useState(false);
 
   const handleScanResult = useCallback((result) => {
-    console.log('[APP] Scan result received:', result);
+    console.log('[APP] Result:', result);
     
     if (result.error) {
-      console.log('[APP] Scan error, continuing...');
       setBoxes([]);
       return;
     }
     
-    // Always update boxes for live overlay
-    if (result.boxes && result.boxes.length > 0) {
-      console.log(`[APP] Updating ${result.boxes.length} boxes`);
-      setBoxes(result.boxes);
-    } else {
-      setBoxes([]);
-    }
-    
+    // Always update boxes
+    setBoxes(result.boxes || []);
     setScanResult(result);
     
-    const hasRequiredFields = result.name && result.number;
-    const isConfident = result.confidence >= CONFIDENCE_THRESHOLD;
+    const hasFields = result.name && result.number;
+    const confident = result.confidence >= CONFIDENCE_THRESHOLD;
     
-    console.log(`[APP] Check: name="${result.name}", number="${result.number}", conf=${result.confidence}, threshold=${CONFIDENCE_THRESHOLD}`);
-    console.log(`[APP] hasRequiredFields=${hasRequiredFields}, isConfident=${isConfident}`);
+    console.log(`[APP] name="${result.name}", number="${result.number}", conf=${result.confidence?.toFixed(2)}, pass=${hasFields && confident}`);
     
-    if (hasRequiredFields && isConfident) {
-      console.log('[APP] Card identified! Pausing scan and showing modal');
+    if (hasFields && confident) {
+      console.log('[APP] Card identified! Showing modal');
       setScanning(false);
       setShowModal(true);
     }
   }, []);
 
   const handleConfirm = async () => {
-    console.log('[APP] Confirming card:', scanResult);
     try {
-      const response = await fetch(`${API_URL}/cards/confirm`, {
+      await fetch(`${API_URL}/cards/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: scanResult.name,
-          collection: scanResult.set || 'unknown',
+          collection: scanResult.set || scanResult.collection || 'unknown',
           number: scanResult.number,
           language: scanResult.language || 'unknown'
         })
       });
-      const data = await response.json();
-      console.log('[APP] Confirm response:', data);
     } catch (e) {
       console.error('[APP] Confirm error:', e);
     }
-    setShowModal(false);
-    setScanResult(null);
-    setBoxes([]);
-    setScanning(true);
-    console.log('[APP] Resuming scanning');
+    resetAndResume();
   };
 
-  const handleCancel = () => {
-    console.log('[APP] Cancel clicked, resuming scanning');
+  const handleCancel = () => resetAndResume();
+
+  const resetAndResume = () => {
     setShowModal(false);
     setScanResult(null);
     setBoxes([]);
     setScanning(true);
   };
 
-  const handleUpload = async (file, debug) => {
+  const handleUpload = async (file, dbg) => {
     setError(null);
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await fetch(`${API_URL}/scan${debug ? '?debug=true' : ''}`, { method: 'POST', body: formData });
+      const res = await fetch(`${API_URL}/scan${dbg ? '?debug=true' : ''}`, { method: 'POST', body: formData });
       const data = await res.json();
       if (data.error) setError(data.error);
       else {
         setScanResult(data);
+        setBoxes(data.boxes || []);
         if (data.name && data.number && data.confidence >= CONFIDENCE_THRESHOLD) setShowModal(true);
       }
     } catch (e) {
@@ -102,16 +90,25 @@ export default function App() {
   return (
     <div className="app">
       <h1>Pokemon Card Scanner</h1>
-      <div className="mode-toggle">
-        <button className={mode === 'camera' ? 'active' : ''} onClick={() => setMode('camera')}>📷 Camera</button>
-        <button className={mode === 'upload' ? 'active' : ''} onClick={() => setMode('upload')}>📁 Upload</button>
+      
+      <div className="controls">
+        <div className="mode-toggle">
+          <button className={mode === 'camera' ? 'active' : ''} onClick={() => setMode('camera')}>📷 Camera</button>
+          <button className={mode === 'upload' ? 'active' : ''} onClick={() => setMode('upload')}>📁 Upload</button>
+        </div>
+        <label className="debug-toggle">
+          <input type="checkbox" checked={debug} onChange={e => setDebug(e.target.checked)} />
+          Debug
+        </label>
       </div>
+
       {mode === 'camera' ? (
         <CameraScanner 
           apiUrl={API_URL} 
           scanning={scanning} 
           onResult={handleScanResult} 
-          boxes={boxes} 
+          boxes={boxes}
+          debug={debug}
         />
       ) : (
         <>
@@ -120,7 +117,21 @@ export default function App() {
           {scanResult && <ScanResult result={scanResult} />}
         </>
       )}
-      {showModal && scanResult && <ConfirmModal result={scanResult} onConfirm={handleConfirm} onCancel={handleCancel} />}
+
+      {/* Debug info panel */}
+      {debug && scanResult && (
+        <div className="debug-panel">
+          <h4>Debug Info</h4>
+          <pre>{JSON.stringify(scanResult.debug || {}, null, 2)}</pre>
+          <p>Boxes: {boxes.length}</p>
+          <p>Raw OCR Title: {scanResult.debug?.raw_ocr_title || 'N/A'}</p>
+          <p>Raw OCR Bottom: {scanResult.debug?.raw_ocr_bottom_left || 'N/A'}</p>
+        </div>
+      )}
+
+      {showModal && scanResult && (
+        <ConfirmModal result={scanResult} onConfirm={handleConfirm} onCancel={handleCancel} />
+      )}
     </div>
   );
 }

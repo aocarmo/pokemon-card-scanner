@@ -1,17 +1,23 @@
 /* FILE: src/App.css */
 .app {
-  max-width: 800px;
-  margin: 1rem auto;
+  max-width: 900px;
+  margin: 0 auto;
   padding: 1rem;
   font-family: system-ui, sans-serif;
 }
 h1 { text-align: center; margin-bottom: 1rem; }
 
+.controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
 .mode-toggle {
   display: flex;
   gap: 0.5rem;
-  justify-content: center;
-  margin-bottom: 1rem;
 }
 .mode-toggle button {
   padding: 0.5rem 1rem;
@@ -25,6 +31,12 @@ h1 { text-align: center; margin-bottom: 1rem; }
   color: #fff;
   border-color: #007bff;
 }
+.debug-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+}
 
 .camera-container { text-align: center; }
 .video-wrapper {
@@ -33,11 +45,12 @@ h1 { text-align: center; margin-bottom: 1rem; }
   background: #000;
   border-radius: 8px;
   overflow: hidden;
+  max-width: 100%;
 }
 .video-wrapper video {
   display: block;
-  max-width: 100%;
-  max-height: 60vh;
+  width: 100%;
+  max-height: 70vh;
 }
 .overlay-canvas {
   position: absolute;
@@ -49,7 +62,14 @@ h1 { text-align: center; margin-bottom: 1rem; }
 }
 .camera-status {
   margin-top: 0.5rem;
-  font-size: 1.1rem;
+  font-size: 1rem;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+.camera-status .dims {
+  color: #666;
+  font-family: monospace;
 }
 .camera-status .scanning { color: #28a745; }
 .camera-status .paused { color: #ffc107; }
@@ -84,6 +104,22 @@ h1 { text-align: center; margin-bottom: 1rem; }
   width: 100px;
 }
 .error { color: red; }
+
+.debug-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f5f5f5;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.debug-panel h4 { margin: 0 0 0.5rem; }
+.debug-panel pre {
+  background: #fff;
+  padding: 0.5rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.75rem;
+}
 
 .modal-overlay {
   position: fixed;
