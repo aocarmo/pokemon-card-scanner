@@ -8,6 +8,7 @@ export default function ScanResult({ result }) {
           <tr><td>Name:</td><td>{result.name || '-'}</td></tr>
           <tr><td>Number:</td><td>{result.number || '-'}</td></tr>
           <tr><td>Set:</td><td>{result.set || '-'}</td></tr>
+          <tr><td>Language:</td><td>{result.language || '-'}</td></tr>
           <tr><td>Confidence:</td><td>{(result.confidence * 100).toFixed(1)}%</td></tr>
         </tbody>
       </table>

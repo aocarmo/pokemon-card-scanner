@@ -11,21 +11,19 @@ class OpenCVCardDetector(ICardDetector):
         self._output_size = output_size
 
     def detect_and_warp(self, image: np.ndarray) -> Optional[np.ndarray]:
-        contour = self._find_card_contour(image)
+        contour = self.find_card_contour(image)
         if contour is None:
             return None
-        return self._warp_perspective(image, contour)
+        return self.warp_from_contour(image, contour)
 
-    def _find_card_contour(self, image: np.ndarray) -> Optional[np.ndarray]:
+    def find_card_contour(self, image: np.ndarray) -> Optional[np.ndarray]:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         edges = cv2.Canny(blurred, 50, 150)
         kernel = np.ones((3, 3), np.uint8)
         edges = cv2.dilate(edges, kernel, iterations=2)
-
         contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
-
         for cnt in contours:
             peri = cv2.arcLength(cnt, True)
             approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
@@ -33,15 +31,10 @@ class OpenCVCardDetector(ICardDetector):
                 return approx
         return None
 
-    def _warp_perspective(self, image: np.ndarray, contour: np.ndarray) -> np.ndarray:
+    def warp_from_contour(self, image: np.ndarray, contour: np.ndarray) -> np.ndarray:
         pts = contour.reshape(4, 2).astype(np.float32)
         rect = self._order_points(pts)
-        dst = np.array([
-            [0, 0],
-            [self._output_size[0], 0],
-            [self._output_size[0], self._output_size[1]],
-            [0, self._output_size[1]]
-        ], dtype=np.float32)
+        dst = np.array([[0, 0], [self._output_size[0], 0], [self._output_size[0], self._output_size[1]], [0, self._output_size[1]]], dtype=np.float32)
         M = cv2.getPerspectiveTransform(rect, dst)
         return cv2.warpPerspective(image, M, self._output_size)
 
