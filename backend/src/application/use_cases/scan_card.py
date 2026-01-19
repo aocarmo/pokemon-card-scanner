@@ -1,5 +1,6 @@
 # FILE: src/application/use_cases/scan_card.py
 from typing import List
+import logging
 import numpy as np
 import cv2
 
@@ -8,6 +9,8 @@ from domain.entities.scan_result import BoundingBox
 from domain.errors import CardNotDetectedError
 from interfaces.vision import ICardDetector, IROIExtractor, ISetSymbolClassifier
 from interfaces.ocr import IOCRService, OCRResult
+
+logger = logging.getLogger(__name__)
 
 
 class ScanCardUseCase:
@@ -31,15 +34,24 @@ class ScanCardUseCase:
         self._debug_path = debug_output_path
 
     def execute(self, image: np.ndarray) -> ScanResult:
+        logger.info(f"[SCAN] Frame received: {image.shape}")
+        
         card_contour = self._detector.find_card_contour(image)
         if card_contour is None:
+            logger.warning("[SCAN] No card contour detected")
             raise CardNotDetectedError("No card detected in image")
 
+        logger.info("[SCAN] Card contour found, warping...")
         warped = self._detector.warp_from_contour(image, card_contour)
         rois = self._roi_extractor.extract(warped)
 
+        logger.info("[SCAN] Running OCR on title ROI...")
         title_results = self._ocr.read(rois["title"])
+        logger.info(f"[SCAN] Title OCR results: {[r.text for r in title_results]}")
+        
+        logger.info("[SCAN] Running OCR on number ROI...")
         number_results = self._ocr.read(rois["number"])
+        logger.info(f"[SCAN] Number OCR results: {[r.text for r in number_results]}")
 
         full_ocr = self._ocr.read(warped)
         language = self._detect_language(full_ocr)
@@ -54,9 +66,14 @@ class ScanCardUseCase:
         name = self._extract_best(title_results)
         number = self._extract_best(number_results)
         confidence = self._calc_confidence(title_results, number_results, set_conf)
-        boxes = self._build_boxes(card_contour)
+        
+        # Build boxes in ORIGINAL frame coordinates
+        boxes = self._build_boxes_from_contour(card_contour, image.shape, name, confidence)
+        logger.info(f"[SCAN] Generated {len(boxes)} boxes: {[b.label for b in boxes]}")
 
-        return ScanResult(name=name, number=number, set=set_code, language=language, confidence=confidence, boxes=tuple(boxes))
+        result = ScanResult(name=name, number=number, set=set_code, language=language, confidence=confidence, boxes=tuple(boxes))
+        logger.info(f"[SCAN] Result: name={name}, number={number}, confidence={confidence:.2f}")
+        return result
 
     def _detect_language(self, ocr_results: List[OCRResult]) -> str:
         all_text = " ".join([r.text.upper() for r in ocr_results])
@@ -68,11 +85,19 @@ class ScanCardUseCase:
             return "English"
         return "unknown"
 
-    def _build_boxes(self, contour: np.ndarray) -> List[BoundingBox]:
-        if contour is None:
-            return []
-        x, y, w, h = cv2.boundingRect(contour)
-        return [BoundingBox(label="card", x=x, y=y, w=w, h=h, conf=1.0)]
+    def _build_boxes_from_contour(self, contour: np.ndarray, img_shape: tuple, name: str, conf: float) -> List[BoundingBox]:
+        """Build bounding boxes in ORIGINAL frame coordinates."""
+        boxes = []
+        if contour is not None:
+            x, y, w, h = cv2.boundingRect(contour)
+            label = name if name else "card"
+            boxes.append(BoundingBox(label=label, x=int(x), y=int(y), w=int(w), h=int(h), conf=float(conf)))
+            
+            # Add title region box (top portion of card)
+            title_y = y
+            title_h = int(h * 0.1)
+            boxes.append(BoundingBox(label="title", x=int(x), y=int(title_y), w=int(w), h=int(title_h), conf=float(conf)))
+        return boxes
 
     def _extract_best(self, results: List[OCRResult]) -> str:
         if not results:

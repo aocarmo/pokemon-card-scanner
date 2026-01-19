@@ -6,9 +6,13 @@ import cv2
 import numpy as np
 import csv
 import os
+import logging
 from pathlib import Path
 
 from api.dependencies import get_scanner
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 router = APIRouter()
 
@@ -28,28 +32,45 @@ class ConfirmCardRequest(BaseModel):
 
 @router.post("/scan")
 async def scan_card(file: UploadFile = File(...), debug: bool = Query(False)):
+    logger.info(f"[API] /scan called, file={file.filename}, debug={debug}")
+    
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     if image is None:
+        logger.error("[API] Invalid image file")
         raise HTTPException(status_code=400, detail="Invalid image file")
 
+    logger.info(f"[API] Image decoded: {image.shape}")
+    
     debug_path = str(STATIC_DIR / "debug_output.jpg") if debug else None
     scanner = get_scanner(debug=debug, debug_output_path=debug_path)
 
     try:
         result = scanner.execute(image)
         response = result.to_dict()
+        logger.info(f"[API] Scan success: name={response.get('name')}, boxes={len(response.get('boxes', []))}")
+        
         if debug and debug_path and os.path.exists(debug_path):
             response["debug_image"] = "/static/debug_output.jpg"
         return JSONResponse(content=response)
     except Exception as e:
-        return JSONResponse(status_code=422, content={"error": str(e), "name": "", "number": "", "set": "", "language": "", "confidence": 0.0, "boxes": []})
+        logger.warning(f"[API] Scan failed: {e}")
+        return JSONResponse(status_code=422, content={
+            "error": str(e), 
+            "name": "", 
+            "number": "", 
+            "set": "", 
+            "language": "", 
+            "confidence": 0.0, 
+            "boxes": []
+        })
 
 
 @router.post("/cards/confirm")
 async def confirm_card(request: ConfirmCardRequest):
+    logger.info(f"[API] /cards/confirm called: {request.name}")
     rows = []
     found = False
 
@@ -70,6 +91,7 @@ async def confirm_card(request: ConfirmCardRequest):
         writer.writeheader()
         writer.writerows(rows)
 
+    logger.info(f"[API] Card saved: {request.name}")
     return {"status": "ok", "message": f"Card saved: {request.name}"}
 
 

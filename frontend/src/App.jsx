@@ -1,5 +1,5 @@
 // FILE: src/App.jsx
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import CameraScanner from './components/CameraScanner';
 import ConfirmModal from './components/ConfirmModal';
 import ImageUpload from './components/ImageUpload';
@@ -7,27 +7,52 @@ import ScanResult from './components/ScanResult';
 import './App.css';
 
 const API_URL = 'http://localhost:8000';
-const CONFIDENCE_THRESHOLD = 0.6;
+const CONFIDENCE_THRESHOLD = 0.5;
 
 export default function App() {
   const [mode, setMode] = useState('camera');
   const [scanResult, setScanResult] = useState(null);
+  const [boxes, setBoxes] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [scanning, setScanning] = useState(true);
   const [error, setError] = useState(null);
 
-  const handleScanResult = (result) => {
-    if (result.error) return;
+  const handleScanResult = useCallback((result) => {
+    console.log('[APP] Scan result received:', result);
+    
+    if (result.error) {
+      console.log('[APP] Scan error, continuing...');
+      setBoxes([]);
+      return;
+    }
+    
+    // Always update boxes for live overlay
+    if (result.boxes && result.boxes.length > 0) {
+      console.log(`[APP] Updating ${result.boxes.length} boxes`);
+      setBoxes(result.boxes);
+    } else {
+      setBoxes([]);
+    }
+    
     setScanResult(result);
-    if (result.name && result.number && result.confidence >= CONFIDENCE_THRESHOLD) {
+    
+    const hasRequiredFields = result.name && result.number;
+    const isConfident = result.confidence >= CONFIDENCE_THRESHOLD;
+    
+    console.log(`[APP] Check: name="${result.name}", number="${result.number}", conf=${result.confidence}, threshold=${CONFIDENCE_THRESHOLD}`);
+    console.log(`[APP] hasRequiredFields=${hasRequiredFields}, isConfident=${isConfident}`);
+    
+    if (hasRequiredFields && isConfident) {
+      console.log('[APP] Card identified! Pausing scan and showing modal');
       setScanning(false);
       setShowModal(true);
     }
-  };
+  }, []);
 
   const handleConfirm = async () => {
+    console.log('[APP] Confirming card:', scanResult);
     try {
-      await fetch(`${API_URL}/cards/confirm`, {
+      const response = await fetch(`${API_URL}/cards/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -37,17 +62,23 @@ export default function App() {
           language: scanResult.language || 'unknown'
         })
       });
+      const data = await response.json();
+      console.log('[APP] Confirm response:', data);
     } catch (e) {
-      console.error('Confirm error:', e);
+      console.error('[APP] Confirm error:', e);
     }
     setShowModal(false);
     setScanResult(null);
+    setBoxes([]);
     setScanning(true);
+    console.log('[APP] Resuming scanning');
   };
 
   const handleCancel = () => {
+    console.log('[APP] Cancel clicked, resuming scanning');
     setShowModal(false);
     setScanResult(null);
+    setBoxes([]);
     setScanning(true);
   };
 
@@ -76,7 +107,12 @@ export default function App() {
         <button className={mode === 'upload' ? 'active' : ''} onClick={() => setMode('upload')}>📁 Upload</button>
       </div>
       {mode === 'camera' ? (
-        <CameraScanner apiUrl={API_URL} scanning={scanning} onResult={handleScanResult} boxes={scanResult?.boxes || []} />
+        <CameraScanner 
+          apiUrl={API_URL} 
+          scanning={scanning} 
+          onResult={handleScanResult} 
+          boxes={boxes} 
+        />
       ) : (
         <>
           <ImageUpload onUpload={handleUpload} loading={false} />
